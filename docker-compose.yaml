@@ -67,12 +67,12 @@ services:
       RUN_REPLICATION_LOG_LEVEL: info
       APP_LOG_LEVEL: info
       TRIGGER_TELEMETRY_DISABLED: 0
-      # # Email configuration (optional - magic links logged if not set)
-      # EMAIL_TRANSPORT: ${EMAIL_TRANSPORT:}
-      # FROM_EMAIL: ${FROM_EMAIL:-}
-      # REPLY_TO_EMAIL: ${REPLY_TO_EMAIL:-}
-      # # Resend
-      # RESEND_API_KEY: ${RESEND_API_KEY:-}
+      # Email configuration (optional - magic links logged if not set)
+      EMAIL_TRANSPORT: ${EMAIL_TRANSPORT:}
+      FROM_EMAIL: ${FROM_EMAIL:-}
+      REPLY_TO_EMAIL: ${REPLY_TO_EMAIL:-}
+      # Resend
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
       # # SMTP alternative
       # SMTP_HOST: ${SMTP_HOST:-}
       # SMTP_PORT: ${SMTP_PORT:-587}
