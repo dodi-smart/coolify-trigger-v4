@@ -124,7 +124,7 @@ services:
       minio:
         condition: service_healthy
       s2:
-        condition: service_started
+        condition: service_healthy
 
   supervisor:
     image: ghcr.io/triggerdotdev/supervisor:${TRIGGER_IMAGE_TAG:-v4.5.12}
@@ -301,6 +301,9 @@ services:
           ]
         }
         JSON
+        # Static busybox lets the distroless s2 image run a healthcheck probe.
+        cp /bin/busybox /config/busybox
+        chmod 755 /config/busybox
     volumes:
       - s2-config:/config
 
@@ -311,6 +314,20 @@ services:
     volumes:
       - s2-config:/config
       - s2-data:/data
+    # Exec-form probe via the busybox binary s2-init copies into /config — the
+    # image is distroless (no shell), so CMD-SHELL healthchecks cannot work here.
+    healthcheck:
+      test:
+        - CMD
+        - /config/busybox
+        - wget
+        - "-q"
+        - "--spider"
+        - "http://127.0.0.1:80/v1/basins"
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     depends_on:
       s2-init:
         condition: service_completed_successfully
