@@ -130,6 +130,8 @@ From the machine you deploy from:
 | `EVENT_REPOSITORY_DEFAULT_STORE` | `clickhouse_v2` | Task event store; empty keeps events in Postgres |
 | `TRIGGER_TELEMETRY_DISABLED` | — | Set to disable telemetry |
 | `NODE_MAX_OLD_SPACE_SIZE` | `8192` | Node heap size in MB; set to ~80% of the container's RAM limit |
+| `DEFAULT_ENV_EXECUTION_CONCURRENCY_LIMIT` | `100` | Max concurrent runs per environment — applied only to environments created after it's set |
+| `DEFAULT_ORG_EXECUTION_CONCURRENCY_LIMIT` | `300` | Max concurrent runs per organization (keep ~3× the env limit) — applied only to orgs created after it's set |
 | `POSTGRES_DB` | `main` | Database name |
 | `POSTGRES_IMAGE_TAG` | `14` | Postgres image tag |
 | `REDIS_IMAGE_TAG` | `7` | Redis image tag |
@@ -197,6 +199,25 @@ subnetted`), widen `default-address-pools` in `/etc/docker/daemon.json`
 [step 5](#deploy). Also check the runner container's own logs with
 `docker logs`; the supervisor logging "create succeeded" only means the
 container was created, not that it's healthy.
+
+**Runs queued even though workers are idle / concurrency capped**
+The effective limits live on the `Organization.maximumConcurrencyLimit` and
+`RuntimeEnvironment.maximumConcurrencyLimit` database rows, stamped at creation
+time. Setting `DEFAULT_ORG_EXECUTION_CONCURRENCY_LIMIT` /
+`DEFAULT_ENV_EXECUTION_CONCURRENCY_LIMIT` only affects orgs and environments
+created afterwards — raise existing ones directly (server shell, container name
+via `docker ps | grep postgres`):
+
+```sql
+-- docker exec -it <postgresql-container> sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB"'
+UPDATE "Organization" SET "maximumConcurrencyLimit" = 300
+  WHERE slug = '<your-org-slug>';
+UPDATE "RuntimeEnvironment" SET "maximumConcurrencyLimit" = 100
+  WHERE "organizationId" = (SELECT id FROM "Organization" WHERE slug = '<your-org-slug>');
+```
+
+Keep the org limit ~3× the env limit. New dequeues pick the values up; restart
+the `trigger` service if a stale limit appears to linger.
 
 **Registry push 401 / auth failures**
 Confirm `docker login` against the registry domain using the
