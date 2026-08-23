@@ -203,10 +203,11 @@ container was created, not that it's healthy.
 **Runs queued even though workers are idle / concurrency capped**
 The effective limits live on the `Organization.maximumConcurrencyLimit` and
 `RuntimeEnvironment.maximumConcurrencyLimit` database rows, stamped at creation
-time. Setting `DEFAULT_ORG_EXECUTION_CONCURRENCY_LIMIT` /
-`DEFAULT_ENV_EXECUTION_CONCURRENCY_LIMIT` only affects orgs and environments
-created afterwards — raise existing ones directly (server shell, container name
-via `docker ps | grep postgres`):
+time. If `DEFAULT_ORG_EXECUTION_CONCURRENCY_LIMIT` /
+`DEFAULT_ENV_EXECUTION_CONCURRENCY_LIMIT` were ever set to an empty string,
+the rows get **0** — no runs execute at all. Setting the vars only affects
+orgs and environments created afterwards — raise existing ones directly
+(server shell, container name via `docker ps | grep postgres`):
 
 ```sql
 -- docker exec -it <postgresql-container> sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB"'
