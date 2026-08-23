@@ -1,274 +1,376 @@
-services:
-  # Init service to create htpasswd file
-  registry-init:
-    image: httpd:alpine
-    volumes:
-      - "registry-auth:/auth"
-    environment:
-      REGISTRY_USERNAME: "trigger"
-      REGISTRY_PASSWORD: "${SERVICE_PASSWORD_REGISTRY}"
-    command: >
-      sh -c "
-        if [ ! -f /auth/htpasswd ]; then
-          echo 'Creating htpasswd file...';
-          htpasswd -Bbc /auth/htpasswd $$REGISTRY_USERNAME $$REGISTRY_PASSWORD;
-          echo 'htpasswd file created successfully';
-        else
-          echo 'htpasswd file already exists';
-        fi
-      "
-    restart: "no"
+# Coolify Docker Compose resource aligned with Coolify v4 catalog
+# (templates/compose/trigger.yaml) plus current official Trigger.dev
+# hosting/docker services (s2-lite, clickhouse/clickhouse-server:26.2).
+#
+# Official source: https://github.com/triggerdotdev/trigger.dev/tree/main/hosting/docker
+# Coolify catalog: https://github.com/coollabsio/coolify/blob/main/templates/compose/trigger.yaml
+#
+# Coolify parser rules encoded here:
+#   - No top-level networks: (Coolify injects the resource UUID network).
+#   - No per-service networks:.
+#   - No ports:/expose: on `trigger` — Traefik port comes from SERVICE_URL_TRIGGER_3000.
+#   - No Traefik labels, container_name, version:, restart: on long-running services.
+#   - List-style environment. Bare SERVICE_URL_TRIGGER_3000 on `trigger` only.
+#   - APP_ORIGIN uses unported ${SERVICE_URL_TRIGGER} (n8n pattern). Do not use
+#     ${SERVICE_URL_TRIGGER_3000} for public origins — that appends :3000 and
+#     breaks login (coollabsio/coolify#8638).
+#   - Service `registry` is forbidden (Coolify maps it to docker-registry).
+#   - docker.sock only on docker-proxy, read-only.
+#   - `dockerregistry` gets its own domain via bare SERVICE_FQDN_DOCKERREGISTRY_5000.
+#
+# The bundled `dockerregistry` service is the default deploy registry: it is
+# exposed with its own Coolify domain and TLS via Traefik, protected with
+# htpasswd auth.
+#
+# Deploy from the Coolify UI. Never `docker compose up` under
+# /data/coolify/applications/<uuid> or /data/coolify/services/<uuid>/.
 
+services:
   trigger:
-    image: 'ghcr.io/triggerdotdev/trigger.dev:main'
-    restart: unless-stopped
-    depends_on:
-      - postgres
-      - redis
-      - clickhouse
-      - electric
-      - minio
-      - registry
+    image: ghcr.io/triggerdotdev/trigger.dev:${TRIGGER_IMAGE_TAG:-v4.5.12}
     user: root
-    command: "sh -c \"chown -R node:node /home/node/shared && exec ./scripts/entrypoint.sh\"\n"
+    command: |
+      sh -c "chown -R node:node /home/node/shared && exec ./scripts/entrypoint.sh"
     environment:
-      REMIX_APP_PORT: 3000
-      APP_ORIGIN: ${SERVICE_URL_TRIGGER}
-      LOGIN_ORIGIN: ${SERVICE_URL_TRIGGER}
-      API_ORIGIN: ${SERVICE_URL_TRIGGER}
-      SESSION_SECRET: '${SERVICE_PASSWORD_SESSION}'
-      MAGIC_LINK_SECRET: '${SERVICE_PASSWORD_MAGIC}'
-      ENCRYPTION_KEY: '${SERVICE_PASSWORD_ENCRYPTION}'
-      MANAGED_WORKER_SECRET: '${SERVICE_PASSWORD_MANAGEDWORKER}'
-      DATABASE_URL: 'postgresql://postgres:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/${POSTGRES_DB:-trigger}?schema=public&sslmode=disable'
-      DIRECT_URL: 'postgresql://postgres:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/${POSTGRES_DB:-trigger}?schema=public&sslmode=disable'
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_TLS_DISABLED: true
-      ELECTRIC_ORIGIN: 'http://electric:3000'
-      DEV_OTEL_EXPORTER_OTLP_ENDPOINT: '${SERVICE_URL_TRIGGER}/otel'
-      DEPLOY_REGISTRY_HOST: '${SERVICE_FQDN_REGISTRY}'
-      DEPLOY_REGISTRY_NAMESPACE: '${REGISTRY_NAMESPACE:-trigger}'
-      DEPLOY_REGISTRY_USERNAME: 'trigger'
-      DEPLOY_REGISTRY_PASSWORD: '${SERVICE_PASSWORD_REGISTRY}'
-      OBJECT_STORE_BASE_URL: 'http://minio:9000'
-      OBJECT_STORE_ACCESS_KEY_ID: admin
-      OBJECT_STORE_SECRET_ACCESS_KEY: '${SERVICE_PASSWORD_MINIO}'
-      GRACEFUL_SHUTDOWN_TIMEOUT: 1000
-      NODE_MAX_OLD_SPACE_SIZE: ${NODE_MAX_OLD_SPACE_SIZE:-1024}
-      TRIGGER_BOOTSTRAP_ENABLED: 1
-      TRIGGER_BOOTSTRAP_WORKER_GROUP_NAME: bootstrap
-      TRIGGER_BOOTSTRAP_WORKER_TOKEN_PATH: /home/node/shared/worker_token
-      CLICKHOUSE_URL: 'http://${CLICKHOUSE_ADMIN_USER:-default}:${SERVICE_PASSWORD_64_CLICKHOUSE}@clickhouse:8123?secure=false'
-      CLICKHOUSE_LOG_LEVEL: info
-      INTERNAL_OTEL_TRACE_LOGGING_ENABLED: 0
-      RUN_REPLICATION_ENABLED: 1
-      RUN_REPLICATION_CLICKHOUSE_URL: 'http://${CLICKHOUSE_ADMIN_USER:-default}:${SERVICE_PASSWORD_64_CLICKHOUSE}@clickhouse:8123'
-      RUN_REPLICATION_LOG_LEVEL: info
-      APP_LOG_LEVEL: info
-      TRIGGER_TELEMETRY_DISABLED: 0
-      # # Email configuration (optional - magic links logged if not set)
-      # EMAIL_TRANSPORT: ${EMAIL_TRANSPORT:}
-      # FROM_EMAIL: ${FROM_EMAIL:-}
-      # REPLY_TO_EMAIL: ${REPLY_TO_EMAIL:-}
-      # # Resend
-      # RESEND_API_KEY: ${RESEND_API_KEY:-}
-      # # SMTP alternative
-      # SMTP_HOST: ${SMTP_HOST:-}
-      # SMTP_PORT: ${SMTP_PORT:-587}
-      # SMTP_SECURE: ${SMTP_SECURE:-false}
-      # SMTP_USER: ${SMTP_USER:-}
-      # SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      # # GitHub OAuth (optional)
-      # AUTH_GITHUB_CLIENT_ID: ${AUTH_GITHUB_CLIENT_ID:-}
-      # AUTH_GITHUB_CLIENT_SECRET: ${AUTH_GITHUB_CLIENT_SECRET:-}
-      # Email whitelist (applies to all auth methods)
-      WHITELISTED_EMAILS: ${WHITELISTED_EMAILS:-}
-      # # AWS SES alternative
-      # AWS_REGION: ${AWS_REGION:-}
-      # AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      # AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      # Admin access (regex pattern to auto-promote users to admin)
-      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
-      # Concurrency limits (capacity planning)
-      DEFAULT_ENV_EXECUTION_CONCURRENCY_LIMIT: ${DEFAULT_ENV_EXECUTION_CONCURRENCY_LIMIT:-100}
-      DEFAULT_ORG_EXECUTION_CONCURRENCY_LIMIT: ${DEFAULT_ORG_EXECUTION_CONCURRENCY_LIMIT:-300}
-      # Development settings
-      DEV_MAX_CONCURRENT_RUNS: ${DEV_MAX_CONCURRENT_RUNS:-25}
-      # Worker settings
-      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-10}
-      WORKER_POLL_INTERVAL: ${WORKER_POLL_INTERVAL:-1000}
-      # Payload & metadata limits
-      TASK_PAYLOAD_OFFLOAD_THRESHOLD: ${TASK_PAYLOAD_OFFLOAD_THRESHOLD:-524288}
-      TASK_PAYLOAD_MAXIMUM_SIZE: ${TASK_PAYLOAD_MAXIMUM_SIZE:-3145728}
-      BATCH_TASK_PAYLOAD_MAXIMUM_SIZE: ${BATCH_TASK_PAYLOAD_MAXIMUM_SIZE:-1000000}
-      TASK_RUN_METADATA_MAXIMUM_SIZE: ${TASK_RUN_METADATA_MAXIMUM_SIZE:-262144}
-      # Realtime settings
-      REALTIME_STREAM_MAX_LENGTH: ${REALTIME_STREAM_MAX_LENGTH:-1000}
-      REALTIME_STREAM_TTL: ${REALTIME_STREAM_TTL:-86400}
+      - SERVICE_URL_TRIGGER_3000
+      - APP_ORIGIN=${SERVICE_URL_TRIGGER}
+      - LOGIN_ORIGIN=${SERVICE_URL_TRIGGER}
+      - API_ORIGIN=${SERVICE_URL_TRIGGER}
+      - ELECTRIC_ORIGIN=http://electric:3000
+      - REALTIME_STREAMS_DEFAULT_VERSION=${REALTIME_STREAMS_DEFAULT_VERSION:-v2}
+      - REALTIME_STREAMS_S2_BASIN=${REALTIME_STREAMS_S2_BASIN:-trigger-realtime}
+      - REALTIME_STREAMS_S2_ENDPOINT=${REALTIME_STREAMS_S2_ENDPOINT:-http://s2/v1}
+      - REALTIME_STREAMS_S2_SKIP_ACCESS_TOKENS=${REALTIME_STREAMS_S2_SKIP_ACCESS_TOKENS:-true}
+      - DATABASE_URL=postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@postgresql:5432/${POSTGRES_DB:-main}?schema=public&sslmode=disable
+      - DIRECT_URL=postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@postgresql:5432/${POSTGRES_DB:-main}?schema=public&sslmode=disable
+      - SESSION_SECRET=${SERVICE_PASSWORD_64_SESSION}
+      - MAGIC_LINK_SECRET=${SERVICE_PASSWORD_64_MAGICLINK}
+      # SERVICE_PASSWORD is exactly 32 chars, matching Trigger.dev's exact-32-char
+      # ENCRYPTION_KEY check. Do not use SERVICE_HEX_32 — older Coolify versions
+      # (pre coollabsio/coolify#9820) generate 64 hex chars for it.
+      - ENCRYPTION_KEY=${SERVICE_PASSWORD_ENCRYPTIONKEY}
+      - PROVIDER_SECRET=${SERVICE_PASSWORD_64_PROVIDER}
+      - COORDINATOR_SECRET=${SERVICE_PASSWORD_64_COORDINATOR}
+      - MANAGED_WORKER_SECRET=${SERVICE_PASSWORD_64_WORKERSECRET}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_TLS_DISABLED=true
+      - APP_LOG_LEVEL=${APP_LOG_LEVEL:-info}
+      - DEV_OTEL_EXPORTER_OTLP_ENDPOINT=${SERVICE_URL_TRIGGER}/otel
+      # Bundled registry (assign a domain to dockerregistry in Coolify). Must be a real
+      # FQDN — trigger.dev deploy silently skips pushing to localhost hosts (trigger.dev#3257).
+      - DEPLOY_REGISTRY_HOST=${SERVICE_FQDN_DOCKERREGISTRY}
+      - DEPLOY_REGISTRY_NAMESPACE=${DEPLOY_REGISTRY_NAMESPACE:-trigger}
+      - OBJECT_STORE_BASE_URL=http://minio:9000
+      - OBJECT_STORE_ACCESS_KEY_ID=${SERVICE_USER_MINIO}
+      - OBJECT_STORE_SECRET_ACCESS_KEY=${SERVICE_PASSWORD_MINIO}
+      - GRACEFUL_SHUTDOWN_TIMEOUT=1000
+      # Node heap MB, ~80% of the container's RAM limit (app default 8192)
+      - NODE_MAX_OLD_SPACE_SIZE=${NODE_MAX_OLD_SPACE_SIZE:-}
+      - TRIGGER_BOOTSTRAP_ENABLED=1
+      - TRIGGER_BOOTSTRAP_WORKER_GROUP_NAME=bootstrap
+      - TRIGGER_BOOTSTRAP_WORKER_TOKEN_PATH=/home/node/shared/worker_token
+      # ?secure=false is required on CLICKHOUSE_URL but must NOT be added to RUN_REPLICATION_CLICKHOUSE_URL (trigger.dev#3674)
+      - CLICKHOUSE_URL=http://${SERVICE_USER_CLICKHOUSE}:${SERVICE_PASSWORD_64_CLICKHOUSE}@clickhouse:8123?secure=false
+      - CLICKHOUSE_LOG_LEVEL=${CLICKHOUSE_LOG_LEVEL:-info}
+      - RUN_REPLICATION_ENABLED=${RUN_REPLICATION_ENABLED:-1}
+      - RUN_REPLICATION_CLICKHOUSE_URL=http://${SERVICE_USER_CLICKHOUSE}:${SERVICE_PASSWORD_64_CLICKHOUSE}@clickhouse:8123
+      - RUN_REPLICATION_LOG_LEVEL=${RUN_REPLICATION_LOG_LEVEL:-info}
+      # Store task events in ClickHouse (recommended). Set empty to keep events in Postgres.
+      - EVENT_REPOSITORY_DEFAULT_STORE=${EVENT_REPOSITORY_DEFAULT_STORE:-clickhouse_v2}
+      - INTERNAL_OTEL_TRACE_LOGGING_ENABLED=${INTERNAL_OTEL_TRACE_LOGGING_ENABLED:-0}
+      - TRIGGER_TELEMETRY_DISABLED=${TRIGGER_TELEMETRY_DISABLED:-}
+      - WHITELISTED_EMAILS=${WHITELISTED_EMAILS:-}
+      - ADMIN_EMAILS=${ADMIN_EMAILS:-}
+      # Email transport for magic-link login: resend (default), smtp, or aws-ses (see README)
+      - EMAIL_TRANSPORT=${EMAIL_TRANSPORT:-resend}
+      # Resend API key (re_...) — without it login links are only printed to the trigger container logs
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      # Sender, e.g. "Trigger.dev <trigger@yourdomain.com>" — domain must be verified in Resend
+      - FROM_EMAIL=${FROM_EMAIL}
+      # Reply-to address for outgoing email
+      - REPLY_TO_EMAIL=${REPLY_TO_EMAIL}
+      # SMTP alternative — set EMAIL_TRANSPORT=smtp and fill these
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_SECURE=${SMTP_SECURE}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - AUTH_GITHUB_CLIENT_ID=${AUTH_GITHUB_CLIENT_ID:-}
+      - AUTH_GITHUB_CLIENT_SECRET=${AUTH_GITHUB_CLIENT_SECRET:-}
+      - DEFAULT_ENV_EXECUTION_CONCURRENCY_LIMIT=${DEFAULT_ENV_EXECUTION_CONCURRENCY_LIMIT:-}
+      - DEFAULT_ORG_EXECUTION_CONCURRENCY_LIMIT=${DEFAULT_ORG_EXECUTION_CONCURRENCY_LIMIT:-}
     volumes:
-      - 'shared-data:/home/node/shared'
+      - shared-data:/home/node/shared
     healthcheck:
       test:
         - CMD
         - node
-        - '-e'
+        - "-e"
         - "require('http').get('http://127.0.0.1:3000/healthcheck',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
-      interval: 30s
-      timeout: 10s
+      interval: 10s
+      timeout: 5s
       retries: 5
-      start_period: 30s
-  postgres:
-    image: postgres:14
-    restart: unless-stopped
+      start_period: 10s
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      electric:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      s2:
+        condition: service_started
+
+  supervisor:
+    image: ghcr.io/triggerdotdev/supervisor:${TRIGGER_IMAGE_TAG:-v4.5.12}
+    user: root
+    command: |
+      sh -c "chown -R node:node /home/node/shared && exec /usr/bin/dumb-init -- pnpm run --filter supervisor start"
+    environment:
+      - TRIGGER_API_URL=http://trigger:3000
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://trigger:3000/otel
+      - TRIGGER_WORKER_TOKEN=file:///home/node/shared/worker_token
+      - MANAGED_WORKER_SECRET=${SERVICE_PASSWORD_64_WORKERSECRET}
+      - TRIGGER_WORKLOAD_API_DOMAIN=supervisor
+      - TRIGGER_WORKLOAD_API_PORT_EXTERNAL=8020
+      - DOCKER_HOST=tcp://docker-proxy:2375
+      # Leave empty on the FIRST deploy; then set to the Coolify resource UUID network and redeploy (see README)
+      - DOCKER_RUNNER_NETWORKS=${DOCKER_RUNNER_NETWORKS}
+      - DOCKER_AUTOREMOVE_EXITED_CONTAINERS=${DOCKER_AUTOREMOVE_EXITED_CONTAINERS:-1}
+      # Bundled registry endpoint (bare host, no scheme — upstream form)
+      - DOCKER_REGISTRY_URL=${SERVICE_FQDN_DOCKERREGISTRY}
+      - DOCKER_REGISTRY_USERNAME=${SERVICE_USER_DOCKERREGISTRY}
+      - DOCKER_REGISTRY_PASSWORD=${SERVICE_PASSWORD_DOCKERREGISTRY}
+      # DEBUG=1 leaks run env vars into supervisor logs (trigger.dev#3566)
+      - DEBUG=${SUPERVISOR_DEBUG:-0}
+      - ENFORCE_MACHINE_PRESETS=1
+      - TRIGGER_DEQUEUE_INTERVAL_MS=1000
+    volumes:
+      - shared-data:/home/node/shared
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - "-e"
+        - "require('http').get('http://127.0.0.1:8020/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      trigger:
+        condition: service_healthy
+      docker-proxy:
+        condition: service_healthy
+
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:v0.4.2
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - LOG_LEVEL=info
+      - POST=1
+      - CONTAINERS=1
+      - IMAGES=1
+      - INFO=1
+      - NETWORKS=1
+      - AUTH=1
+      - DISTRIBUTION=1
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - nc -z 127.0.0.1 2375 || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  postgresql:
+    image: postgres:${POSTGRES_IMAGE_TAG:-14}
     command:
-      - -c
+      - "-c"
       - wal_level=logical
     environment:
-      POSTGRES_USER: 'postgres'
-      POSTGRES_PASSWORD: '${SERVICE_PASSWORD_POSTGRES}'
-      POSTGRES_DB: '${POSTGRES_DB:-trigger}'
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=${POSTGRES_DB:-main}
     volumes:
-      - 'postgres-data:/var/lib/postgresql/data'
+      - postgresql-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 20s
       retries: 10
-      start_period: 10s
+
   redis:
-    image: 'redis:7'
-    restart: unless-stopped
+    image: redis:${REDIS_IMAGE_TAG:-7}
     volumes:
-      - 'redis-data:/data'
+      - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+        - CMD
+        - redis-cli
+        - ping
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+
   electric:
-    image: 'electricsql/electric:1.2.4'
-    restart: unless-stopped
-    depends_on:
-      - postgres
+    image: electricsql/electric:${ELECTRIC_IMAGE_TAG:-1.2.4}
     environment:
-      DATABASE_URL: 'postgresql://postgres:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/${POSTGRES_DB:-trigger}?schema=public&sslmode=disable'
-      ELECTRIC_INSECURE: 'true'
-      ELECTRIC_USAGE_REPORTING: 'false'
+      - DATABASE_URL=postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@postgresql:5432/${POSTGRES_DB:-main}?sslmode=disable
+      - ELECTRIC_INSECURE=true
+      - ELECTRIC_USAGE_REPORTING=false
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/v1/health"]
+      test:
+        - CMD
+        - curl
+        - "-f"
+        - "http://localhost:3000/v1/health"
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+    depends_on:
+      postgresql:
+        condition: service_healthy
+
   clickhouse:
-    image: 'bitnamilegacy/clickhouse:latest'
-    restart: unless-stopped
+    image: clickhouse/clickhouse-server:${CLICKHOUSE_IMAGE_TAG:-26.2}
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
     environment:
-      CLICKHOUSE_ADMIN_USER: ${CLICKHOUSE_ADMIN_USER:-default}
-      CLICKHOUSE_ADMIN_PASSWORD: '${SERVICE_PASSWORD_64_CLICKHOUSE}'
+      - CLICKHOUSE_USER=${SERVICE_USER_CLICKHOUSE}
+      - CLICKHOUSE_PASSWORD=${SERVICE_PASSWORD_64_CLICKHOUSE}
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
     volumes:
-      - 'clickhouse-data:/bitnami/clickhouse'
-      - './clickhouse/override.xml:/bitnami/clickhouse/etc/config.d/override.xml:ro'
+      - clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse/data-paths.xml:/etc/clickhouse-server/config.d/data-paths.xml:ro
+      - ./clickhouse/override.xml:/etc/clickhouse-server/config.d/override.xml:ro
     healthcheck:
-      test: ["CMD", "clickhouse-client", "--host", "localhost", "--port", "9000", "--user", "${CLICKHOUSE_ADMIN_USER:-default}", "--password", "${SERVICE_PASSWORD_64_CLICKHOUSE}", "--query", "SELECT 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-  registry:
-    image: 'registry:2'
-    restart: unless-stopped
-    depends_on:
-      registry-init:
-        condition: service_completed_successfully
-    volumes:
-      - "registry-auth:/auth:ro"
-      - "registry-data:/var/lib/registry"
-    environment:
-      REGISTRY_AUTH: htpasswd
-      REGISTRY_AUTH_HTPASSWD_REALM: 'Registry Realm'
-      REGISTRY_AUTH_HTPASSWD_PATH: /auth/htpasswd
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5000/"]
+      test:
+        - CMD-SHELL
+        - wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+
   minio:
-    image: bitnamilegacy/minio:latest
-    restart: unless-stopped
+    image: bitnamilegacy/minio:${MINIO_IMAGE_TAG:-latest}
     environment:
-      MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: '${SERVICE_PASSWORD_MINIO}'
-      MINIO_DEFAULT_BUCKETS: packets
-      MINIO_BROWSER: 'on'
+      - MINIO_ROOT_USER=${SERVICE_USER_MINIO}
+      - MINIO_ROOT_PASSWORD=${SERVICE_PASSWORD_MINIO}
+      - MINIO_DEFAULT_BUCKETS=packets
+      - MINIO_BROWSER=off
     volumes:
-      - 'minio-data:/bitnami/minio/data'
+      - minio-data:/bitnami/minio/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test:
+        - CMD
+        - curl
+        - "-f"
+        - "http://localhost:9000/minio/health/live"
       interval: 5s
       timeout: 10s
       retries: 5
       start_period: 10s
 
-  supervisor:
-    image: 'ghcr.io/triggerdotdev/supervisor:main'
-    restart: unless-stopped
+  s2-init:
+    image: busybox:${BUSYBOX_IMAGE_TAG:-1.37}
+    # One-shot. Coolify would otherwise set unless-stopped and loop this container.
+    # exclude_from_hc (Coolify-only key) excludes it from status monitoring.
+    restart: "no"
+    exclude_from_hc: true
+    environment:
+      - REALTIME_STREAMS_S2_BASIN=${REALTIME_STREAMS_S2_BASIN:-trigger-realtime}
+    command:
+      - sh
+      - -c
+      - |
+        cat > /config/s2-spec.json <<JSON
+        {
+          "basins": [
+            {
+              "name": "$$REALTIME_STREAMS_S2_BASIN",
+              "config": { "create_stream_on_append": true, "create_stream_on_read": true }
+            }
+          ]
+        }
+        JSON
+    volumes:
+      - s2-config:/config
+
+  s2:
+    image: ${S2_IMAGE:-ghcr.io/s2-streamstore/s2:latest@sha256:d6ded5ca7dd619fa7c946f06e39a98f9c95c6883c8bb884e5eaa129f232c920c}
+    user: "0:0"
+    command: ["lite", "--init-file", "/config/s2-spec.json", "--local-root", "/data"]
+    volumes:
+      - s2-config:/config
+      - s2-data:/data
     depends_on:
-      - docker-proxy
-      - trigger
-    user: root
-    command: "sh -c \"chown -R node:node /home/node/shared && exec /usr/bin/dumb-init -- pnpm run --filter supervisor start\"\n"
+      s2-init:
+        condition: service_completed_successfully
+
+  # Bundled registry, the default deploy registry. Not named `registry`
+  # (Coolify special-cases that name) and not `docker-registry` (hyphens break
+  # SERVICE_* keys).
+  dockerregistry-init:
+    image: httpd:${HTTPD_IMAGE_TAG:-2.4}
+    restart: "no"
+    exclude_from_hc: true
     environment:
-      TRIGGER_API_URL: http://trigger:3000
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://trigger:3000/otel
-      TRIGGER_WORKER_TOKEN: "file:///home/node/shared/worker_token"
-      MANAGED_WORKER_SECRET: ${SERVICE_PASSWORD_MANAGEDWORKER}
-      TRIGGER_WORKLOAD_API_DOMAIN: supervisor
-      TRIGGER_WORKLOAD_API_PORT_EXTERNAL: 8020
-      DOCKER_HOST: tcp://docker-proxy:2375
-      DOCKER_RUNNER_NETWORKS: ${DOCKER_RUNNER_NETWORKS}
-      DOCKER_AUTOREMOVE_EXITED_CONTAINERS: ${DOCKER_AUTOREMOVE_EXITED_CONTAINERS:-0}
-      DOCKER_REGISTRY_URL: ${SERVICE_URL_REGISTRY}
-      DOCKER_REGISTRY_USERNAME: "trigger"
-      DOCKER_REGISTRY_PASSWORD: "${SERVICE_PASSWORD_REGISTRY}"
-      DEBUG: 1
-      ENFORCE_MACHINE_PRESETS: 1
-      TRIGGER_DEQUEUE_INTERVAL_MS: 1000
+      - REGISTRY_USER=${SERVICE_USER_DOCKERREGISTRY}
+      - REGISTRY_PASSWORD=${SERVICE_PASSWORD_DOCKERREGISTRY}
     volumes:
-      - "shared-data:/home/node/shared"
-      - "/var/run/docker.sock:/var/run/docker.sock"
-    healthcheck:
-      test: ["CMD", "node", "-e", "http.get('http://localhost:8020/health', res => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 10s
-  docker-proxy:
-    image: 'tecnativa/docker-socket-proxy:latest'
-    restart: unless-stopped
-    volumes:
-      - '/var/run/docker.sock:/var/run/docker.sock:ro'
+      - dockerregistry-auth:/auth
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        if [ -z "$$REGISTRY_PASSWORD" ]; then
+          echo "SERVICE_PASSWORD_DOCKERREGISTRY is required for the bundled registry" >&2
+          exit 1
+        fi
+        htpasswd -Bbn "$$REGISTRY_USER" "$$REGISTRY_PASSWORD" > /auth/htpasswd
+        echo "Wrote bundled registry htpasswd for $$REGISTRY_USER"
+
+  dockerregistry:
+    image: registry:${REGISTRY_IMAGE_TAG:-2}
     environment:
-      LOG_LEVEL: info
-      POST: 1
-      CONTAINERS: 1
-      IMAGES: 1
-      INFO: 1
-      NETWORKS: 1
+      # Bare declaration: gives the registry its own Coolify domain + TLS, Traefik port 5000
+      - SERVICE_FQDN_DOCKERREGISTRY_5000
+      - REGISTRY_AUTH=htpasswd
+      - REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm
+      - REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd
+      - REGISTRY_HTTP_SECRET=${SERVICE_PASSWORD_REGISTRYHTTPSECRET}
+    volumes:
+      - dockerregistry-auth:/auth:ro
+      - dockerregistry-data:/var/lib/registry
     healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "2375"]
-      interval: 30s
+      test:
+        - CMD-SHELL
+        - wget -q --spider http://127.0.0.1:5000/v2/ 2>&1 || wget -q --spider -S http://127.0.0.1:5000/v2/ 2>&1 | grep -q "401"
+      interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 5s
+    depends_on:
+      dockerregistry-init:
+        condition: service_completed_successfully
+
+# Named volumes. Coolify's parser UUID-prefixes these on deploy. They are
+# declared so this file is valid Compose (`docker compose config` / Git resources).
 volumes:
-  postgres-data:
+  shared-data:
+  postgresql-data:
   redis-data:
   clickhouse-data:
   minio-data:
-  shared-data:
-  registry-data:
-  registry-auth:
+  s2-config:
+  s2-data:
+  dockerregistry-auth:
+  dockerregistry-data:
