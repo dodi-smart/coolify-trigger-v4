@@ -1,0 +1,77 @@
+// This is the ONLY Renovate config for this repo. Renovate resolves `renovate.json5`
+// at the root before `.github/renovate.json5`, so a second copy under .github/ is
+// never read. Do not reintroduce it.
+//
+// Upstream compose/config changes that a tag bump cannot carry are tracked by
+// .github/workflows/upstream-drift.yml (a sticky issue), not here.
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:best-practices",
+    ":dependencyDashboard",
+    // Listed AFTER best-practices so `chore(deps)` wins over its fix/chore split.
+    ":semanticCommitTypeAll(chore)",
+  ],
+  // best-practices pins Docker and Actions digests via presets that a later
+  // `pinDigests: false` packageRule does not override; drop them at the source so
+  // image tags and Actions stay readable in review.
+  ignorePresets: ["docker:pinDigests", "helpers:pinGitHubActionDigests"],
+  timezone: "Europe/Sofia",
+  // Weekly. The trigger.dev group PR is rebased in place, so it stays one sticky PR.
+  schedule: ["before 6am on monday"],
+  // Single-branch repo: Coolify deploys from main, so PRs target the default branch.
+  semanticCommits: "enabled",
+  labels: ["deps:update"],
+  prConcurrentLimit: 5,
+  customManagers: [
+    {
+      // `image: name:${VAR:-default}`: the default is the pinned version.
+      customType: "regex",
+      description: "Image tag defaults in docker-compose.yaml",
+      managerFilePatterns: ["/(^|/)docker-compose\\.ya?ml$/"],
+      matchStrings: [
+        "image:\\s*(?<depName>[^\\s:$]+):\\$\\{\\w+:-(?<currentValue>[^}@\\s]+)\\}",
+      ],
+      datasourceTemplate: "docker",
+    },
+    {
+      customType: "regex",
+      description: "Annotated image tags in .env.example",
+      managerFilePatterns: ["/(^|/)\\.env\\.example$/"],
+      matchStrings: [
+        "#\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s*\\n[A-Z0-9_]+=(?<currentValue>\\S+)",
+      ],
+    },
+  ],
+  packageRules: [
+    { matchManagers: ["github-actions"], groupName: "github actions" },
+    // The sticky PR: webapp and supervisor must always ship the same tag.
+    {
+      matchPackageNames: ["ghcr.io/triggerdotdev/trigger.dev", "ghcr.io/triggerdotdev/supervisor"],
+      groupName: "trigger.dev",
+      // Skip helm-*, latest, main and other non-release tags.
+      allowedVersions: "/^v\\d+\\.\\d+\\.\\d+$/",
+      addLabels: ["agent:review"],
+    },
+    // These track the versions upstream hosting/docker pins (on-disk formats or
+    // protocol compatibility). Opened only on demand from the Dependency Dashboard.
+    {
+      matchPackageNames: [
+        "postgres",
+        "redis",
+        "electricsql/electric",
+        "clickhouse/clickhouse-server",
+        "registry",
+        "ghcr.io/s2-streamstore/s2",
+        // s2 runs a copy of /bin/busybox in a distroless image, so it must stay static.
+        "busybox",
+      ],
+      dependencyDashboardApproval: true,
+    },
+    // Major upgrades need a data migration, not a tag bump.
+    { matchPackageNames: ["postgres", "redis"], matchUpdateTypes: ["major"], enabled: false },
+    // Tracks `latest` by design (bitnamilegacy is frozen).
+    { matchPackageNames: ["bitnamilegacy/minio"], enabled: false },
+    { matchUpdateTypes: ["major"], addLabels: ["deps:major"] },
+  ],
+}
