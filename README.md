@@ -1,7 +1,7 @@
 # Trigger.dev v4 on Coolify
 
 A Coolify **Docker Compose** resource for self-hosting [Trigger.dev](https://trigger.dev)
-v4, pinned to `v4.5.12`. It tracks the current official self-hosting stack —
+v4, pinned to `v4.6.4`. It tracks the current official self-hosting stack —
 ClickHouse 26.2, s2-lite realtime streams, MinIO object storage — and adds a
 bundled, TLS-terminated Docker registry as the default deploy target plus
 Resend as the default email transport.
@@ -113,7 +113,7 @@ From the machine you deploy from:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `TRIGGER_IMAGE_TAG` | `v4.5.12` | Webapp/supervisor image tag; `v4.5.0` is the last tag running v3 SDK tasks |
+| `TRIGGER_IMAGE_TAG` | `v4.6.4` | Webapp/supervisor image tag; `v4.5.0` is the last tag running v3 SDK tasks |
 | `EMAIL_TRANSPORT` | `resend` | Email backend: `resend`, `smtp`, or `aws-ses` |
 | `RESEND_API_KEY` | — | Resend API key |
 | `FROM_EMAIL` | — | Sender address for magic-link emails |
@@ -121,6 +121,7 @@ From the machine you deploy from:
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASSWORD` | — | Used when `EMAIL_TRANSPORT=smtp` |
 | `WHITELISTED_EMAILS` | — | Regex/list restricting who can sign up |
 | `ADMIN_EMAILS` | — | Emails granted admin rights |
+| `ADMIN_DASHBOARD_ENABLED` | `true` | `false` disables the admin dashboard and impersonation; never set it empty (parses as `false`) |
 | `AUTH_GITHUB_CLIENT_ID` / `AUTH_GITHUB_CLIENT_SECRET` | — | Optional GitHub OAuth login |
 | `DOCKER_RUNNER_NETWORKS` | empty | Leave empty on first deploy; set to the resource UUID network after (step 5) |
 | `DEPLOY_REGISTRY_NAMESPACE` | `trigger` | Namespace prefix for pushed deploy images |
@@ -146,6 +147,7 @@ From the machine you deploy from:
 | `REALTIME_STREAMS_S2_BASIN` | `trigger-realtime` | s2 basin name |
 | `REALTIME_STREAMS_S2_ENDPOINT` | `http://s2/v1` | s2 endpoint |
 | `REALTIME_STREAMS_S2_SKIP_ACCESS_TOKENS` | `true` | Skip s2 access tokens (internal network only) |
+| `REALTIME_STREAMS_S2_ACCESS_TOKEN` | — | Access token for a hosted S2, with `SKIP_ACCESS_TOKENS=false` |
 | log level vars | `info` | `APP_LOG_LEVEL`, `CLICKHOUSE_LOG_LEVEL`, `RUN_REPLICATION_LOG_LEVEL`, etc. |
 
 Coolify auto-generates the rest on first deploy: `SERVICE_URL_TRIGGER_3000`
