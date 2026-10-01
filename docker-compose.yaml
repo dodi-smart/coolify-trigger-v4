@@ -27,7 +27,7 @@
 
 services:
   trigger:
-    image: ghcr.io/triggerdotdev/trigger.dev:${TRIGGER_IMAGE_TAG:-v4.5.12}
+    image: ghcr.io/triggerdotdev/trigger.dev:${TRIGGER_IMAGE_TAG:-v4.6.4}
     user: root
     command: |
       sh -c "chown -R node:node /home/node/shared && exec ./scripts/entrypoint.sh"
@@ -41,6 +41,8 @@ services:
       - REALTIME_STREAMS_S2_BASIN=${REALTIME_STREAMS_S2_BASIN:-trigger-realtime}
       - REALTIME_STREAMS_S2_ENDPOINT=${REALTIME_STREAMS_S2_ENDPOINT:-http://s2/v1}
       - REALTIME_STREAMS_S2_SKIP_ACCESS_TOKENS=${REALTIME_STREAMS_S2_SKIP_ACCESS_TOKENS:-true}
+      # Only for a hosted S2 (https://s2.dev) with SKIP_ACCESS_TOKENS=false
+      - REALTIME_STREAMS_S2_ACCESS_TOKEN=${REALTIME_STREAMS_S2_ACCESS_TOKEN:-}
       - DATABASE_URL=postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@postgresql:5432/${POSTGRES_DB:-main}?schema=public&sslmode=disable
       - DIRECT_URL=postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@postgresql:5432/${POSTGRES_DB:-main}?schema=public&sslmode=disable
       - SESSION_SECRET=${SERVICE_PASSWORD_64_SESSION}
@@ -82,6 +84,9 @@ services:
       - TRIGGER_TELEMETRY_DISABLED=${TRIGGER_TELEMETRY_DISABLED:-}
       - WHITELISTED_EMAILS=${WHITELISTED_EMAILS:-}
       - ADMIN_EMAILS=${ADMIN_EMAILS:-}
+      # Never pass this empty — an empty string parses as false and disables the
+      # admin dashboard and impersonation. Set false to turn them off deliberately.
+      - ADMIN_DASHBOARD_ENABLED=${ADMIN_DASHBOARD_ENABLED:-true}
       # Email transport for magic-link login: resend (default), smtp, or aws-ses (see README)
       - EMAIL_TRANSPORT=${EMAIL_TRANSPORT:-resend}
       # Resend API key (re_...) — without it login links are only printed to the trigger container logs
@@ -129,7 +134,7 @@ services:
         condition: service_healthy
 
   supervisor:
-    image: ghcr.io/triggerdotdev/supervisor:${TRIGGER_IMAGE_TAG:-v4.5.12}
+    image: ghcr.io/triggerdotdev/supervisor:${TRIGGER_IMAGE_TAG:-v4.6.4}
     user: root
     command: |
       sh -c "chown -R node:node /home/node/shared && exec /usr/bin/dumb-init -- pnpm run --filter supervisor start"
@@ -170,7 +175,7 @@ services:
         condition: service_healthy
 
   docker-proxy:
-    image: tecnativa/docker-socket-proxy:v0.4.2
+    image: tecnativa/docker-socket-proxy:v0.5.0
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
@@ -253,6 +258,8 @@ services:
       - clickhouse-data:/var/lib/clickhouse
       - ./clickhouse/data-paths.xml:/etc/clickhouse-server/config.d/data-paths.xml:ro
       - ./clickhouse/override.xml:/etc/clickhouse-server/config.d/override.xml:ro
+      # Profile settings only take effect from users.d
+      - ./clickhouse/users-override.xml:/etc/clickhouse-server/users.d/override.xml:ro
     healthcheck:
       test:
         - CMD-SHELL
