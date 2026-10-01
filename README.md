@@ -264,6 +264,25 @@ env SERVICE_URL_TRIGGER=https://trigger.example.com SERVICE_URL_TRIGGER_3000=htt
 (The `sed` strips the Coolify-only `exclude_from_hc` key, which plain
 `docker compose` doesn't understand.)
 
+## Keeping up to date
+
+Two weekly jobs (Monday morning) keep this template in line with upstream:
+
+- **Renovate** (`renovate.json5`) bumps image tags. `trigger.dev` and `supervisor`
+  always move together in one sticky PR on `renovate/trigger.dev`. The images
+  upstream pins (Postgres, Redis, Electric, ClickHouse, registry, s2, busybox) wait
+  for approval on the Dependency Dashboard issue, and Postgres/Redis majors are
+  off — they need a data migration, not a tag bump.
+- **Upstream Drift** (`.github/workflows/upstream-drift.yml`) diffs upstream
+  [`hosting/docker`](https://github.com/triggerdotdev/trigger.dev/tree/main/hosting/docker)
+  between the pinned tag and the latest release, and keeps one sticky issue with
+  the diffs and the self-hosting release notes. A new or widened range is sent to
+  the Agents workflow for triage; once planned, `agent:implement` ports it in a
+  draft PR. Run it by hand with `gh workflow run upstream-drift.yml`.
+
+Merge the drift PR together with (or before) the matching Renovate bump, then
+redeploy from Coolify.
+
 ## Credits
 
 - Upstream Trigger.dev [`hosting/docker`](https://github.com/triggerdotdev/trigger.dev/tree/main/hosting/docker) compose

@@ -1,0 +1,74 @@
+# Weekly check of upstream triggerdotdev/trigger.dev `hosting/docker` against the
+# tag this template pins. Renovate bumps image tags (renovate/trigger.dev PR);
+# this catches what a tag bump cannot carry: compose, env and config changes.
+#
+# Keeps ONE sticky issue (found by the `<!-- upstream-drift` marker) up to date,
+# closes it once the pin has caught up, and hands a new or widened range to the
+# Agents workflow for triage — an issue opened with GITHUB_TOKEN does not fire
+# `issues` events, but a workflow_dispatch from it does.
+name: Upstream Drift
+on:
+  schedule:
+    - cron: "0 5 * * 1" # Monday, alongside Renovate's weekly window
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: upstream-drift
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Diff upstream hosting/docker
+        id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUT_DIR: ${{ runner.temp }}/drift
+        run: |
+          .github/scripts/upstream-drift.sh | tee "$RUNNER_TEMP/result.txt"
+          tr ' ' '\n' <"$RUNNER_TEMP/result.txt" >>"$GITHUB_OUTPUT"
+      - name: Sync sticky issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PINNED: ${{ steps.diff.outputs.pinned }}
+          LATEST: ${{ steps.diff.outputs.latest }}
+          CHANGED: ${{ steps.diff.outputs.changed }}
+          BODY: ${{ runner.temp }}/drift/body.md
+        run: |
+          set -euo pipefail
+          # Filter locally rather than trusting search to index an HTML comment.
+          existing=$(gh issue list --state open --limit 500 --json number,body \
+            --jq '[.[] | select(.body | startswith("<!-- upstream-drift "))][0]')
+          num=$(jq -r '.number // empty' <<<"$existing")
+          old_range=$(jq -r '.body // ""' <<<"$existing" | sed -nE '1s/.*range=([^ ]+).*/\1/p')
+          range="$PINNED...$LATEST"
+
+          if [ "$CHANGED" -eq 0 ]; then
+            if [ -n "$num" ]; then
+              gh issue close "$num" --comment "No upstream \`hosting/docker\` drift left between \`$PINNED\` and \`$LATEST\`."
+            fi
+            echo "No drift."
+            exit 0
+          fi
+
+          if [ -z "$num" ]; then
+            url=$(gh issue create --title "Port upstream Trigger.dev self-hosting changes ($range)" \
+              --body-file "$BODY" --label area:compose)
+            num=${url##*/}
+          else
+            gh issue edit "$num" --title "Port upstream Trigger.dev self-hosting changes ($range)" --body-file "$BODY"
+          fi
+
+          if [ "$old_range" != "$range" ]; then
+            gh workflow run agents.yml -f issue-number="$num"
+            echo "Issue #$num ($range) sent to triage."
+          else
+            echo "Issue #$num unchanged ($range)."
+          fi
