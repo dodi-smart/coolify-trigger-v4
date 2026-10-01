@@ -1,0 +1,35 @@
+# Areas for dodi-smart/coolify-trigger-v4
+#
+# `area:` is the ONE repo-specific label namespace. Each area lists the paths
+# that DEFINE it, so a triage agent maps a changed file to an area
+# deterministically instead of guessing.
+#
+# The `rules` block matters more than the list: it resolves the overlaps where
+# the obvious guess is wrong.
+
+areas:
+  - name: compose
+    description: "Coolify compose resource: services, images, env wiring, magic SERVICE_* variables"
+    paths: [docker-compose.yaml, .env.example]
+
+  - name: clickhouse
+    description: "ClickHouse server and users config mounted into the clickhouse service"
+    paths: [clickhouse/]
+
+  - name: docs
+    description: "Deploy guide, configuration reference and troubleshooting"
+    paths: [README.md, CLAUDE.md]
+
+  - name: ci
+    description: "Workflows, Renovate, upstream drift check and repo automation"
+    paths: [.github/, renovate.json5, zizmor.yml]
+
+rules:
+  - "A change to the clickhouse service's env, mounts or healthcheck in
+     docker-compose.yaml is area:clickhouse as well as area:compose; a bare
+     ClickHouse image tag bump is area:compose only."
+  - "Porting upstream hosting/docker changes (the upstream drift issue) is
+     area:compose, plus area:clickhouse when upstream/clickhouse files changed,
+     plus area:docs when a new env var needs a README row — every new variable does."
+  - "A Trigger.dev image bump (Renovate's renovate/trigger.dev PR) is area:compose,
+     not area:ci, even though Renovate opened it."
