@@ -41,8 +41,14 @@ magic variables and network.
 
 Renovate (`renovate.json5`) and `.github/workflows/upstream-drift.yml` run weekly;
 the README's "Keeping up to date" section describes both. Images that upstream pins
-(Postgres, Redis, Electric, ClickHouse, registry, s2, busybox) follow upstream's
+(Postgres, Redis, ClickHouse, registry, s2, busybox) follow upstream's
 pin, not their own latest release.
+
+Electric is intentionally absent: its image was removed from Docker Hub
+(electric-sql/electric#4822) and realtime runs on the native backend
+(`REALTIME_BACKEND_NATIVE_ENABLED=1`, `REALTIME_BACKEND_DEFAULT=native`), as in
+upstream's Helm chart. Do not port an `electric` service back from upstream's
+Docker compose.
 
 ## Triage & Labels
 

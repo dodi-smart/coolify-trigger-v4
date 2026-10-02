@@ -1,6 +1,9 @@
 # Coolify Docker Compose resource aligned with Coolify v4 catalog
 # (templates/compose/trigger.yaml) plus current official Trigger.dev
 # hosting/docker services (s2-lite, clickhouse/clickhouse-server:26.2).
+# No Electric: its Docker Hub image is gone (electric-sql/electric#4822), so
+# realtime run subscriptions use Trigger.dev's native backend, as the upstream
+# Helm chart now does.
 #
 # Official source: https://github.com/triggerdotdev/trigger.dev/tree/main/hosting/docker
 # Coolify catalog: https://github.com/coollabsio/coolify/blob/main/templates/compose/trigger.yaml
@@ -36,7 +39,11 @@ services:
       - APP_ORIGIN=${SERVICE_URL_TRIGGER}
       - LOGIN_ORIGIN=${SERVICE_URL_TRIGGER}
       - API_ORIGIN=${SERVICE_URL_TRIGGER}
-      - ELECTRIC_ORIGIN=http://electric:3000
+      # Native realtime run subscriptions (Postgres/Redis/ClickHouse), replacing Electric.
+      # A `realtimeBackend` feature-flag override (global or per org) wins over
+      # REALTIME_BACKEND_DEFAULT — it must be unset or `native` (see README).
+      - REALTIME_BACKEND_NATIVE_ENABLED=${REALTIME_BACKEND_NATIVE_ENABLED:-1}
+      - REALTIME_BACKEND_DEFAULT=${REALTIME_BACKEND_DEFAULT:-native}
       - REALTIME_STREAMS_DEFAULT_VERSION=${REALTIME_STREAMS_DEFAULT_VERSION:-v2}
       - REALTIME_STREAMS_S2_BASIN=${REALTIME_STREAMS_S2_BASIN:-trigger-realtime}
       - REALTIME_STREAMS_S2_ENDPOINT=${REALTIME_STREAMS_S2_ENDPOINT:-http://s2/v1}
@@ -123,8 +130,6 @@ services:
       postgresql:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      electric:
         condition: service_healthy
       clickhouse:
         condition: service_healthy
@@ -224,25 +229,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  electric:
-    image: electricsql/electric:${ELECTRIC_IMAGE_TAG:-1.2.4}
-    environment:
-      - DATABASE_URL=postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@postgresql:5432/${POSTGRES_DB:-main}?sslmode=disable
-      - ELECTRIC_INSECURE=true
-      - ELECTRIC_USAGE_REPORTING=false
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - "-f"
-        - "http://localhost:3000/v1/health"
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    depends_on:
-      postgresql:
-        condition: service_healthy
 
   clickhouse:
     image: clickhouse/clickhouse-server:${CLICKHOUSE_IMAGE_TAG:-26.2}

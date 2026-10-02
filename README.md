@@ -26,7 +26,6 @@ the recommended path.
 | `docker-proxy` | `tecnativa/docker-socket-proxy` | Only holder of `docker.sock`, read-only |
 | `postgresql` | `postgres:14` | Primary database (`wal_level=logical`) |
 | `redis` | `redis:7` | Queues and caching |
-| `electric` | `electricsql/electric` | Postgres sync (ElectricSQL) |
 | `clickhouse` | `clickhouse/clickhouse-server:26.2` | Run analytics and event storage |
 | `minio` | `bitnamilegacy/minio` | Object store for run packets (`packets` bucket) |
 | `s2-init` + `s2` | `busybox` + `ghcr.io/s2-streamstore/s2` | Realtime streams v2 (s2-lite) |
@@ -38,6 +37,7 @@ the recommended path.
 | --- | --- | --- |
 | `webapp` | `trigger` | — |
 | `postgres` | `postgresql` | Matches the Coolify catalog template naming |
+| `electric` | — (removed) | Its Docker Hub image is gone ([electric-sql/electric#4822](https://github.com/electric-sql/electric/issues/4822)); realtime runs on Trigger.dev's native backend, as in the upstream Helm chart |
 | `registry` | `dockerregistry` | Coolify maps the exact service name `registry` to its own docker-registry catalog entry, and a hyphenated name (`docker-registry`) can't form valid `SERVICE_*` magic-variable keys |
 
 ## Prerequisites
@@ -138,13 +138,14 @@ From the machine you deploy from:
 | `POSTGRES_DB` | `main` | Database name |
 | `POSTGRES_IMAGE_TAG` | `14` | Postgres image tag |
 | `REDIS_IMAGE_TAG` | `7` | Redis image tag |
-| `ELECTRIC_IMAGE_TAG` | `1.2.4` | ElectricSQL image tag |
 | `CLICKHOUSE_IMAGE_TAG` | `26.2` | ClickHouse image tag |
 | `REGISTRY_IMAGE_TAG` | `2` | Bundled registry image tag |
 | `MINIO_IMAGE_TAG` | `latest` | MinIO image tag |
 | `BUSYBOX_IMAGE_TAG` | `1.37` | s2-init helper image tag |
 | `HTTPD_IMAGE_TAG` | `2.4` | dockerregistry-init helper image tag |
 | `S2_IMAGE` | pinned digest | s2-lite realtime image |
+| `REALTIME_BACKEND_NATIVE_ENABLED` | `1` | Native realtime run subscriptions (replaces Electric) |
+| `REALTIME_BACKEND_DEFAULT` | `native` | Realtime backend when no `realtimeBackend` feature-flag override is set; keep `native` — Electric isn't deployed |
 | `REALTIME_STREAMS_DEFAULT_VERSION` | `v2` | Realtime streams protocol version |
 | `REALTIME_STREAMS_S2_BASIN` | `trigger-realtime` | s2 basin name |
 | `REALTIME_STREAMS_S2_ENDPOINT` | `http://s2/v1` | s2 endpoint |
@@ -224,6 +225,25 @@ UPDATE "RuntimeEnvironment" SET "maximumConcurrencyLimit" = 100
 Keep the org limit ~3× the env limit. New dequeues pick the values up; restart
 the `trigger` service if a stale limit appears to linger.
 
+**Realtime run updates never arrive (dashboard or `useRealtimeRun`)**
+Realtime run subscriptions use the native backend; there is no Electric
+service. A `realtimeBackend` feature-flag override beats
+`REALTIME_BACKEND_DEFAULT`, and `electric` or `shadow` points subscriptions at
+the missing service. Both queries should return no rows (or only `native`):
+
+```sql
+SELECT key, value FROM "FeatureFlag" WHERE key = 'realtimeBackend';
+SELECT id, "featureFlags" FROM "Organization" WHERE "featureFlags" ? 'realtimeBackend';
+```
+
+Delete the global row, or remove the key from the organization's
+`featureFlags`, then restart `trigger`.
+
+**`pull access denied for electricsql/electric`**
+An older revision of this template still deploys Electric, whose Docker Hub
+image was removed ([electric-sql/electric#4822](https://github.com/electric-sql/electric/issues/4822)).
+Redeploy from the current `main`.
+
 **Registry push 401 / auth failures**
 Confirm `docker login` against the registry domain using the
 `SERVICE_USER_DOCKERREGISTRY` credentials. Large layer pushes go through
@@ -272,7 +292,7 @@ Two weekly jobs (Monday morning) keep this template in line with upstream:
 
 - **Renovate** (`renovate.json5`) bumps image tags. `trigger.dev` and `supervisor`
   always move together in one sticky PR on `renovate/trigger.dev`. The images
-  upstream pins (Postgres, Redis, Electric, ClickHouse, registry, s2, busybox) wait
+  upstream pins (Postgres, Redis, ClickHouse, registry, s2, busybox) wait
   for approval on the Dependency Dashboard issue, and Postgres/Redis majors are
   off — they need a data migration, not a tag bump.
 - **Upstream Drift** (`.github/workflows/upstream-drift.yml`) diffs upstream
