@@ -59,7 +59,6 @@
       matchPackageNames: [
         "postgres",
         "redis",
-        "electricsql/electric",
         "clickhouse/clickhouse-server",
         "registry",
         "ghcr.io/s2-streamstore/s2",
