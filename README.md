@@ -280,11 +280,12 @@ env SERVICE_URL_TRIGGER=https://trigger.example.com SERVICE_URL_TRIGGER_3000=htt
     SERVICE_PASSWORD_64_COORDINATOR=x SERVICE_PASSWORD_64_WORKERSECRET=x SERVICE_USER_CLICKHOUSE=c \
     SERVICE_PASSWORD_64_CLICKHOUSE=x SERVICE_USER_MINIO=m SERVICE_PASSWORD_MINIO=x \
     SERVICE_USER_DOCKERREGISTRY=r SERVICE_PASSWORD_DOCKERREGISTRY=x SERVICE_PASSWORD_REGISTRYHTTPSECRET=x \
-  sh -c 'sed "/exclude_from_hc/d" docker-compose.yaml | docker compose -f - config >/dev/null' && echo OK
+  sh -c "yq 'del(.services[].exclude_from_hc) | del(.services[].volumes[] | select(type == \"!!map\") | .content)' docker-compose.yaml | docker compose -f - config >/dev/null" && echo OK
 ```
 
-(The `sed` strips the Coolify-only `exclude_from_hc` key, which plain
-`docker compose` doesn't understand.)
+(The [`yq`](https://github.com/mikefarah/yq) filter strips the Coolify-only
+`exclude_from_hc` and volume `content:` keys, which plain `docker compose`
+rejects.)
 
 ## Keeping up to date
 

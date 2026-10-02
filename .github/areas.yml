@@ -13,8 +13,8 @@ areas:
     paths: [docker-compose.yaml, .env.example]
 
   - name: clickhouse
-    description: "ClickHouse server and users config mounted into the clickhouse service"
-    paths: [clickhouse/]
+    description: "ClickHouse server and users config, inlined into the clickhouse service"
+    paths: ["docker-compose.yaml (clickhouse service)"]
 
   - name: docs
     description: "Deploy guide, configuration reference and troubleshooting"
