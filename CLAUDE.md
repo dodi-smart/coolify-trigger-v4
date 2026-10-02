@@ -3,7 +3,7 @@
 A Coolify **Docker Compose resource** for self-hosted Trigger.dev v4, derived from
 upstream [`hosting/docker`](https://github.com/triggerdotdev/trigger.dev/tree/main/hosting/docker).
 There is no application code: the product is `docker-compose.yaml`, `.env.example`,
-`clickhouse/*.xml` and the README deploy guide. `main` is the only branch, and
+the README deploy guide. `main` is the only branch, and
 Coolify deploys from it.
 
 ## Porting upstream changes
@@ -27,8 +27,13 @@ self-hosting changes" issue):
   variables an explicit `:-default`.
 - Skip local-only upstream tooling: `generate-secrets.sh`, the Traefik example,
   publish IPs, logging drivers, `restart:` policies.
-- Keep config files under `clickhouse/` verbatim copies of upstream's, so the
-  drift diff stays readable.
+- Coolify ships only `docker-compose.yaml` to the server: a repo file bind-mounted
+  by a relative path never arrives, and Docker mounts an empty directory instead.
+  Inline config files with Coolify's `content:` volume extension (as the
+  `clickhouse` service does), keeping the content a verbatim copy of upstream's.
+- Never port upstream's `clickhouse/data-paths.xml`: it moves ClickHouse's data
+  root to `/var/lib/clickhouse/data/` for Bitnami-era volumes, and on these
+  volumes it would hide every existing table.
 - Every new variable gets a row in the README configuration reference and an
   entry in `.env.example`.
 - Bump `trigger.dev` and `supervisor` together; they must always share a tag.
