@@ -232,6 +232,81 @@ services:
 
   clickhouse:
     image: clickhouse/clickhouse-server:${CLICKHOUSE_IMAGE_TAG:-26.2}
+    # Coolify ships only docker-compose.yaml to the server, so repo files can't be
+    # bind-mounted, and its `content:` extension only seeds a file once (a stored
+    # record then overrides the compose file). The container writes its own config
+    # at startup instead, so a change here recreates it with the new files.
+    # Heredocs are verbatim copies of upstream hosting/clickhouse/{override,users-override}.xml
+    # (escape any `$` as `$$`). Upstream's data-paths.xml is deliberately NOT ported:
+    # it moves the data root to /var/lib/clickhouse/data/ for Bitnami-era volumes,
+    # and on these volumes (data at the root) it would hide every existing table.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        cat > /etc/clickhouse-server/config.d/override.xml <<'XML'
+        <clickhouse>
+            <logger>
+                <!--
+                    Possible levels: ["none", "fatal", "critical", "error", "warning", "notice", "information", "debug", "trace", "test"]
+                    See: https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/Logger.h#L105-L114
+                -->
+                <level>warning</level>
+            </logger>
+            <!-- Official recommendations for systems with <16GB RAM -->
+            <mark_cache_size>524288000</mark_cache_size> <!-- 500MB -->
+            <concurrent_threads_soft_limit_num>1</concurrent_threads_soft_limit_num>
+
+            <!-- ClickHouse's own telemetry, too heavy for the recommended machine size -->
+            <metric_log remove="1"/>
+            <asynchronous_metric_log remove="1"/>
+            <trace_log remove="1"/>
+            <query_thread_log remove="1"/>
+            <session_log remove="1"/>
+            <text_log remove="1"/>
+            <zookeeper_log remove="1"/>
+            <processors_profile_log remove="1"/>
+            <asynchronous_insert_log remove="1"/>
+            <backup_log remove="1"/>
+            <latency_log remove="1"/>
+            <query_metric_log remove="1"/>
+            <opentelemetry_span_log remove="1"/>
+            <query_views_log remove="1"/>
+
+            <!-- A config-level ttl survives log-table recreation, unlike ALTER ... MODIFY TTL -->
+            <part_log>
+                <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+            </part_log>
+            <query_log>
+                <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+            </query_log>
+            <error_log>
+                <ttl>event_date + INTERVAL 30 DAY DELETE</ttl>
+            </error_log>
+
+            <!-- Profile settings only apply from users.d, see users-override.xml -->
+        </clickhouse>
+        XML
+        # Profile settings only take effect from users.d
+        cat > /etc/clickhouse-server/users.d/override.xml <<'XML'
+        <clickhouse>
+            <profiles>
+                <default>
+                    <max_threads>1</max_threads>
+                    <max_block_size>8192</max_block_size>
+                    <max_download_threads>1</max_download_threads>
+                    <input_format_parallel_parsing>0</input_format_parallel_parsing>
+                    <output_format_parallel_formatting>0</output_format_parallel_formatting>
+                    <!-- Samplers only feed trace_log, which is disabled -->
+                    <memory_profiler_step>0</memory_profiler_step>
+                    <memory_profiler_sample_probability>0</memory_profiler_sample_probability>
+                    <query_profiler_real_time_period_ns>0</query_profiler_real_time_period_ns>
+                    <query_profiler_cpu_time_period_ns>0</query_profiler_cpu_time_period_ns>
+                </default>
+            </profiles>
+        </clickhouse>
+        XML
+        exec /entrypoint.sh
     ulimits:
       nofile:
         soft: 262144
@@ -242,80 +317,6 @@ services:
       - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
     volumes:
       - clickhouse-data:/var/lib/clickhouse
-      # Coolify only ships docker-compose.yaml to the server, so config files are
-      # inlined with its `content:` extension (Coolify writes them before deploy).
-      # Verbatim copies of upstream hosting/clickhouse/{override,users-override}.xml.
-      # Upstream's data-paths.xml is deliberately NOT ported: it relocates data to
-      # /var/lib/clickhouse/data/ for Bitnami-era volumes, and on these volumes
-      # (data at the root) it would hide every existing table.
-      - type: bind
-        source: ./clickhouse-config/override.xml
-        target: /etc/clickhouse-server/config.d/override.xml
-        read_only: true
-        content: |
-          <clickhouse>
-              <logger>
-                  <!--
-                      Possible levels: ["none", "fatal", "critical", "error", "warning", "notice", "information", "debug", "trace", "test"]
-                      See: https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/Logger.h#L105-L114
-                  -->
-                  <level>warning</level>
-              </logger>
-              <!-- Official recommendations for systems with <16GB RAM -->
-              <mark_cache_size>524288000</mark_cache_size> <!-- 500MB -->
-              <concurrent_threads_soft_limit_num>1</concurrent_threads_soft_limit_num>
-
-              <!-- ClickHouse's own telemetry, too heavy for the recommended machine size -->
-              <metric_log remove="1"/>
-              <asynchronous_metric_log remove="1"/>
-              <trace_log remove="1"/>
-              <query_thread_log remove="1"/>
-              <session_log remove="1"/>
-              <text_log remove="1"/>
-              <zookeeper_log remove="1"/>
-              <processors_profile_log remove="1"/>
-              <asynchronous_insert_log remove="1"/>
-              <backup_log remove="1"/>
-              <latency_log remove="1"/>
-              <query_metric_log remove="1"/>
-              <opentelemetry_span_log remove="1"/>
-              <query_views_log remove="1"/>
-
-              <!-- A config-level ttl survives log-table recreation, unlike ALTER ... MODIFY TTL -->
-              <part_log>
-                  <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
-              </part_log>
-              <query_log>
-                  <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
-              </query_log>
-              <error_log>
-                  <ttl>event_date + INTERVAL 30 DAY DELETE</ttl>
-              </error_log>
-
-              <!-- Profile settings only apply from users.d, see users-override.xml -->
-          </clickhouse>
-      # Profile settings only take effect from users.d
-      - type: bind
-        source: ./clickhouse-config/users-override.xml
-        target: /etc/clickhouse-server/users.d/override.xml
-        read_only: true
-        content: |
-          <clickhouse>
-              <profiles>
-                  <default>
-                      <max_threads>1</max_threads>
-                      <max_block_size>8192</max_block_size>
-                      <max_download_threads>1</max_download_threads>
-                      <input_format_parallel_parsing>0</input_format_parallel_parsing>
-                      <output_format_parallel_formatting>0</output_format_parallel_formatting>
-                      <!-- Samplers only feed trace_log, which is disabled -->
-                      <memory_profiler_step>0</memory_profiler_step>
-                      <memory_profiler_sample_probability>0</memory_profiler_sample_probability>
-                      <query_profiler_real_time_period_ns>0</query_profiler_real_time_period_ns>
-                      <query_profiler_cpu_time_period_ns>0</query_profiler_cpu_time_period_ns>
-                  </default>
-              </profiles>
-          </clickhouse>
     healthcheck:
       test:
         - CMD-SHELL
