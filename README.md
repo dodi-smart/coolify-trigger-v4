@@ -1,5 +1,7 @@
 # Trigger.dev v4 on Coolify
 
+[![shared workflows v1](https://img.shields.io/badge/shared_workflows-v1-0969da)](https://github.com/dodi-smart/.github)
+
 A Coolify **Docker Compose** resource for self-hosting [Trigger.dev](https://trigger.dev)
 v4, pinned to `v4.6.4`. It tracks the current official self-hosting stack —
 ClickHouse 26.2, s2-lite realtime streams, MinIO object storage — and adds a
