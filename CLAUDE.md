@@ -29,8 +29,11 @@ self-hosting changes" issue):
   publish IPs, logging drivers, `restart:` policies.
 - Coolify ships only `docker-compose.yaml` to the server: a repo file bind-mounted
   by a relative path never arrives, and Docker mounts an empty directory instead.
-  Inline config files with Coolify's `content:` volume extension (as the
-  `clickhouse` service does), keeping the content a verbatim copy of upstream's.
+  Don't use Coolify's `content:` volume extension either — it seeds the file once
+  and a stored record overrides later compose changes. Have the container write
+  its config at startup (heredocs in `entrypoint`, then `exec` the image's own
+  entrypoint), as the `clickhouse` service does, keeping the content a verbatim
+  copy of upstream's and escaping `$` as `$$`.
 - Never port upstream's `clickhouse/data-paths.xml`: it moves ClickHouse's data
   root to `/var/lib/clickhouse/data/` for Bitnami-era volumes, and on these
   volumes it would hide every existing table.
