@@ -67,8 +67,12 @@ jobs:
           fi
 
           if [ "$old_range" != "$range" ]; then
-            gh workflow run agents.yml -f issue-number="$num"
-            echo "Issue #$num ($range) sent to triage."
+            # Non-fatal: the Agents workflow may be disabled; the issue still tracks the drift.
+            if gh workflow run agents.yml -f issue-number="$num"; then
+              echo "Issue #$num ($range) sent to triage."
+            else
+              echo "::warning::Agents workflow unavailable; issue #$num ($range) left for manual triage."
+            fi
           else
             echo "Issue #$num unchanged ($range)."
           fi
