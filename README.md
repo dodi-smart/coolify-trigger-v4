@@ -47,8 +47,10 @@ the recommended path.
   with available resources.
 - Two DNS records pointing at the Coolify host: one for the app, one for the
   bundled registry.
-- A [Resend](https://resend.com) account and API key (optional — without it,
-  magic-link emails fall back to being readable in the container logs).
+- A [Resend](https://resend.com) account and API key, or SMTP / AWS SES
+  credentials (see [Alternatives](#smtp--aws-ses-email)). Email is required:
+  login is magic-link only, and the webapp won't start without a working
+  transport.
 - Willingness to allow the `/var/run/docker.sock` bind (read-only) on the
   `docker-proxy` service when Coolify prompts for it.
 
@@ -89,8 +91,7 @@ the recommended path.
    If you ever recreate the resource, the UUID changes — update the variable
    again.
 
-6. Log in at your app domain via magic-link email. Without Resend configured,
-   retrieve the link with `docker logs <trigger container>` on the host.
+6. Log in at your app domain via magic-link email.
 
 ## Deploy your first project
 
@@ -117,7 +118,7 @@ From the machine you deploy from:
 | --- | --- | --- |
 | `TRIGGER_IMAGE_TAG` | `v4.6.4` | Webapp/supervisor image tag; `v4.5.0` is the last tag running v3 SDK tasks |
 | `EMAIL_TRANSPORT` | `resend` | Email backend: `resend`, `smtp`, or `aws-ses` |
-| `RESEND_API_KEY` | — | Resend API key |
+| `RESEND_API_KEY` | — | Resend API key; required with `EMAIL_TRANSPORT=resend`, or the webapp won't start |
 | `FROM_EMAIL` | — | Sender address for magic-link emails |
 | `REPLY_TO_EMAIL` | — | Reply-to address |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASSWORD` | — | Used when `EMAIL_TRANSPORT=smtp` |
@@ -248,6 +249,12 @@ Redeploy from the current `main`.
 Confirm `docker login` against the registry domain using the
 `SERVICE_USER_DOCKERREGISTRY` credentials. Large layer pushes go through
 Coolify's Traefik, which has no body-size limit by default.
+
+**Webapp exits with `Missing API key. Pass it to the constructor new Resend("re_123")`**
+`EMAIL_TRANSPORT` is `resend` (the default) but `RESEND_API_KEY` is empty. Set
+the key, or switch to [SMTP / AWS SES](#smtp--aws-ses-email). Don't set
+`EMAIL_TRANSPORT` to an empty value to get log-only links: the app rejects an
+empty value at startup.
 
 **Login link broken / wrong origin**
 The domain assigned to `trigger` must match the public URL exactly. Origins

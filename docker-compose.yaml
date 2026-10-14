@@ -96,7 +96,9 @@ services:
       - ADMIN_DASHBOARD_ENABLED=${ADMIN_DASHBOARD_ENABLED:-true}
       # Email transport for magic-link login: resend (default), smtp, or aws-ses (see README)
       - EMAIL_TRANSPORT=${EMAIL_TRANSPORT:-resend}
-      # Resend API key (re_...) — without it login links are only printed to the trigger container logs
+      # Resend API key (re_...) — required with the default resend transport; without it the
+      # webapp fails to start ("Missing API key"). There is no log-only fallback here: that
+      # needs EMAIL_TRANSPORT unset, and an empty value fails the app's env validation.
       - RESEND_API_KEY=${RESEND_API_KEY}
       # Sender, e.g. "Trigger.dev <trigger@yourdomain.com>" — domain must be verified in Resend
       - FROM_EMAIL=${FROM_EMAIL}
