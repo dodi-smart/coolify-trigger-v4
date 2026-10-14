@@ -3,7 +3,7 @@
 [![shared workflows v1](https://img.shields.io/badge/shared_workflows-v1-0969da)](https://github.com/dodi-smart/.github)
 
 A Coolify **Docker Compose** resource for self-hosting [Trigger.dev](https://trigger.dev)
-v4, pinned to `v4.6.4`. It tracks the current official self-hosting stack —
+v4, pinned to `v4.7.3`. It tracks the current official self-hosting stack —
 ClickHouse 26.2, s2-lite realtime streams, MinIO object storage — and adds a
 bundled, TLS-terminated Docker registry as the default deploy target plus
 Resend as the default email transport.
@@ -115,13 +115,14 @@ From the machine you deploy from:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `TRIGGER_IMAGE_TAG` | `v4.6.4` | Webapp/supervisor image tag; `v4.5.0` is the last tag running v3 SDK tasks |
+| `TRIGGER_IMAGE_TAG` | `v4.7.3` | Webapp/supervisor image tag; `v4.5.0` is the last tag running v3 SDK tasks |
 | `EMAIL_TRANSPORT` | `resend` | Email backend: `resend`, `smtp`, or `aws-ses` |
 | `RESEND_API_KEY` | — | Resend API key |
 | `FROM_EMAIL` | — | Sender address for magic-link emails |
 | `REPLY_TO_EMAIL` | — | Reply-to address |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASSWORD` | — | Used when `EMAIL_TRANSPORT=smtp` |
 | `WHITELISTED_EMAILS` | — | Regex/list restricting who can sign up |
+| `BLOCKED_EMAIL_DOMAINS` | — | Comma-separated email domains (including subdomains) that can't sign in or sign up |
 | `ADMIN_EMAILS` | — | Emails granted admin rights |
 | `ADMIN_DASHBOARD_ENABLED` | `true` | `false` disables the admin dashboard and impersonation; never set it empty (parses as `false`) |
 | `AUTH_GITHUB_CLIENT_ID` / `AUTH_GITHUB_CLIENT_SECRET` | — | Optional GitHub OAuth login |
