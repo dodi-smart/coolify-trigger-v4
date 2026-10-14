@@ -30,7 +30,7 @@
 
 services:
   trigger:
-    image: ghcr.io/triggerdotdev/trigger.dev:${TRIGGER_IMAGE_TAG:-v4.6.4}
+    image: ghcr.io/triggerdotdev/trigger.dev:${TRIGGER_IMAGE_TAG:-v4.7.3}
     user: root
     command: |
       sh -c "chown -R node:node /home/node/shared && exec ./scripts/entrypoint.sh"
@@ -90,6 +90,7 @@ services:
       - INTERNAL_OTEL_TRACE_LOGGING_ENABLED=${INTERNAL_OTEL_TRACE_LOGGING_ENABLED:-0}
       - TRIGGER_TELEMETRY_DISABLED=${TRIGGER_TELEMETRY_DISABLED:-}
       - WHITELISTED_EMAILS=${WHITELISTED_EMAILS:-}
+      - BLOCKED_EMAIL_DOMAINS=${BLOCKED_EMAIL_DOMAINS:-}
       - ADMIN_EMAILS=${ADMIN_EMAILS:-}
       # Never pass this empty — an empty string parses as false and disables the
       # admin dashboard and impersonation. Set false to turn them off deliberately.
@@ -139,7 +140,7 @@ services:
         condition: service_healthy
 
   supervisor:
-    image: ghcr.io/triggerdotdev/supervisor:${TRIGGER_IMAGE_TAG:-v4.6.4}
+    image: ghcr.io/triggerdotdev/supervisor:${TRIGGER_IMAGE_TAG:-v4.7.3}
     user: root
     command: |
       sh -c "chown -R node:node /home/node/shared && exec /usr/bin/dumb-init -- pnpm run --filter supervisor start"
