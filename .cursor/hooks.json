@@ -1,0 +1,41 @@
+{
+  "hooks": {
+    "afterFileEdit": [
+      {
+        "command": "sh .dira/hook.sh cursor"
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": "sh .dira/hook.sh cursor"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "sh .dira/hook.sh cursor"
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "sh .dira/hook.sh cursor"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "sh .dira/hook.sh cursor"
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": "sh .dira/bootstrap.sh cursor",
+        "timeout": 300
+      }
+    ],
+    "stop": [
+      {
+        "command": "sh .dira/hook.sh cursor"
+      }
+    ]
+  },
+  "version": 1
+}
