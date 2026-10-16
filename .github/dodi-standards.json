@@ -1,0 +1,36 @@
+{
+  "$comment": "Managed by dev-standards (repo-triage-setup). Fleet sync re-renders the rendered files; edit a caller's with: block to change its inputs, or set \"mode\": \"local\" on an entry to stop managing that file.",
+  "channel": "v1",
+  "files": {
+    ".github/workflows/agents.yml": {
+      "kind": "rendered",
+      "sha256": "cea19350c2bdec760aaaf9f8ce563be421cfdf4ebbc6ebe3beaf221536ba1b65",
+      "template": "workflows/agents.yml",
+      "version": "1.25.2"
+    },
+    ".github/workflows/pr-review.yml": {
+      "kind": "rendered",
+      "sha256": "de4ca62aac0ceecdacc60bc0745431ee3698eb7f7df71cf9fab6163236aad8cb",
+      "template": "workflows/pr-review.yml",
+      "version": "1.25.2"
+    },
+    "renovate.json5": {
+      "kind": "seeded",
+      "sha256": "61e01b4f710ba527318afeff86420cad8455644af1843ec794893269d8e453ce",
+      "template": "renovate.json5",
+      "version": "1.25.2"
+    }
+  },
+  "opt-ins": {
+    "commitlint": false,
+    "coverage": "none",
+    "hk": false,
+    "react-doctor": false,
+    "release": false,
+    "worktree-backend": "compose",
+    "zavet": false
+  },
+  "schema": 1,
+  "stack": "none",
+  "version": "1.25.2"
+}
