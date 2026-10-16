@@ -42,9 +42,10 @@ jobs:
   triage:
     # The reusable workflow gates internally (bots, commands, agent:no-touch),
     # but this cheap pre-filter keeps unrelated comment traffic from starting a
-    # run at all.
+    # run at all. The PR review events this file subscribes to exist for the
+    # assist job and must not start triage.
     if: >-
-      (github.event_name != 'issue_comment' && github.event_name != 'issues')
+      github.event_name == 'workflow_dispatch'
       || (github.event_name == 'issue_comment' && (contains(github.event.comment.body, '@claude triage') || contains(github.event.comment.body, '@claude plan')))
       || (github.event_name == 'issues' && github.event.action != 'labeled')
       || (github.event_name == 'issues' && github.event.label.name == 'agent:triage')
@@ -81,7 +82,7 @@ jobs:
       id-token: write
     # with:
     #   runner-weight: heavy      # the default; implementing means building
-    #   base-branch: develop      # defaults to the repo's default branch
+    #   base-branch: develop      # defaults to the repo's default branch, develop
 
   # THIS REPLACES claude.yml (as claude-assist.yml did). Delete claude.yml too,
   # if it is still there — it never checked `agent:no-touch`.
