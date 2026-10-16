@@ -16,7 +16,7 @@
     },
     "renovate.json5": {
       "kind": "seeded",
-      "sha256": "61e01b4f710ba527318afeff86420cad8455644af1843ec794893269d8e453ce",
+      "sha256": "bcb8e89c42317c8237f5ba16751d24d3af69c2278b09d78226fde1cd933a99fb",
       "template": "renovate.json5",
       "version": "1.25.2"
     }
